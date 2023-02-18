@@ -7,7 +7,7 @@ def d1_d2(S0, K, r, sigma, T):
     d1 = (log(S0/K) + (r+sigma**2/2)*T)/(sigma*sqrt(T))
     d2 = d1 - sigma*sqrt(T)
     return d1,d2
-def call_option_price(S0, K, r, T, d1,d2):
+def call_option_price(S0, K, r, T, d1, d2):
     return S0*norm.cdf(d1) - K*exp(-r*T)*norm.cdf(d2)
 maturity = 365
 S0 = 100
