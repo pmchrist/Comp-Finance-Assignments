@@ -23,7 +23,6 @@ def GBM_euler_mthod(S0, K, r, volatility_delta, volatility_stock, T, M, hedge_fr
     all_daily_deltas = []
     S = S0
     dt = T/M
-    k=0
     for m in range(M):
         norm_sampled = np.random.normal(0, 1)
         t = T-dt*m
@@ -34,7 +33,6 @@ def GBM_euler_mthod(S0, K, r, volatility_delta, volatility_stock, T, M, hedge_fr
         call_option = call_option_price(S, K, r, t, d1, d2)
         # Custom Frequency hedging
         if m % int(M*hedge_frequency/365) == 0:
-            k+=1
             d1, d2 = d1_d2(S, K, r, volatility_delta, t)
 
             normal_d1 = norm.cdf(d1)
