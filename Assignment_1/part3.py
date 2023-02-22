@@ -21,12 +21,17 @@ def GBM_euler_mthod(S0, K, r, volatility_delta, volatility_stock, T, M, hedge_fr
     all_put_option_prices = []
     all_deltas = []
     all_daily_deltas = []
-    S = S0
     dt = T/M
     for m in range(M):
-        norm_sampled = np.random.normal(0, 1)
-        t = T-dt*m
-        S = S + r*S*dt + volatility_stock*S*sqrt(dt)*norm_sampled
+        # If init, we dont need to calculate price change
+        if m == 0: 
+            t = T
+            S = S0
+        # Find Brownian Motion of the Underlying price
+        else:
+            norm_sampled = np.random.normal(0, 1)
+            t = T-dt*m
+            S = S + r*S*dt + volatility_stock*S*sqrt(dt)*norm_sampled
         d1, d2 = d1_d2(S, K, r, volatility_delta, t)
         # Daily Hedging
         normal_d1_daily = norm.cdf(d1)
