@@ -4,7 +4,7 @@ from math import *
 from scipy.stats import norm
 
 def d1_d2(S0, K, r, sigma, T):
-    d1 = (log(S0/K) + (r+sigma**2/2)*T)/(sigma*sqrt(T))
+    d1 = (log(S0/K) + (r+(sigma**2)/2)*T)/(sigma*sqrt(T))
     d2 = d1 - sigma*sqrt(T)
     return d1,d2
 def call_option_price(S0, K, r, T, d1, d2):
@@ -15,9 +15,9 @@ def put_option_price(S0, K, r, T, d1,d2):
 maturity = 365
 S0 = 100
 strike = 99
-K = 100
+K = 99
 volatility_delta = 0.2
-volatility_stock = 0.2
+volatility_stock = 0.9
 r = 0.06
 hedge_frequency = 7
 
@@ -59,18 +59,21 @@ def GBM_euler_mthod(S0, maturity, hedging_frequency):
 
 
 def plotting_func(x,y, label = None):
-    if label:
+    if label != 'Stock Price':
+        plt.step(x,y, where='post',label = label)
+    elif label == 'Stock Price':
         plt.plot(x,y, label = label)
     else:
-
         plt.plot(x,y)
 
 
 
+
+
 if __name__ == "__main__":
-    stock_prices, call_option_prices, all_call_options_hedged_daily, put_option_prices, deltas, all_daily_deltas = GBM_euler_mthod(S0, maturity, hedge_frequency)
+    stock_prices, call_option_prices, all_call_options_hedged_weekly, put_option_prices, deltas, all_daily_deltas = GBM_euler_mthod(S0, maturity, hedge_frequency)
     deltas = [(all_daily_deltas, f'Delta Hedged Daily'),(deltas, f'Delta Hedged Every {hedge_frequency} days')]
-    plotted_prices = [(stock_prices, 'Stock Price'), (call_option_prices, 'Option Price Hedged Daily'), (all_call_options_hedged_daily, f'Option Price Hedged Every {hedge_frequency} days')]#, (put_option_prices, 'Put Option Price') ]
+    plotted_prices = [(stock_prices, 'Stock Price'), (call_option_prices, 'Option Price Hedged Daily'), (all_call_options_hedged_weekly, f'Option Price Hedged Every {hedge_frequency} days')]#, (put_option_prices, 'Put Option Price') ]
     for i in plotted_prices:
         if i[1] == 'Stock Price':
             plotting_func(np.linspace(0,365, 365), i[0], i[1])
