@@ -83,7 +83,7 @@ hedge_frequency = 7     # Weekly (given in amount of days)
 M = 3650                # Discretization resolution
 
 if __name__ == "__main__":
-    stock_prices,subsampled_stock_prices, call_option_prices, all_call_options_hedged_weekly, put_option_prices, deltas, all_daily_deltas = GBM_euler_mthod(S0, K, r, volatility_delta, volatility_stock, T, M, hedge_frequency)
+    stock_prices, subsampled_stock_prices, call_option_prices, all_call_options_hedged_weekly, put_option_prices, deltas, all_daily_deltas = GBM_euler_mthod(S0, K, r, volatility_delta, volatility_stock, T, M, hedge_frequency)
     deltas = [(all_daily_deltas, f'Delta Hedged Daily'),(deltas, f'Delta Hedged Every {hedge_frequency} days')]
     plotted_prices = [(stock_prices, 'Stock Price'), (call_option_prices, 'Option Price Hedged Daily'), (all_call_options_hedged_weekly, f'Option Price Hedged Every {hedge_frequency} days')]#, (put_option_prices, 'Put Option Price') ]
     for i in plotted_prices:
