@@ -1,16 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import norm
+from time import time
 
-
-params = {'r':[0.04,0.04,0.04],
-          'sigma':[0.3,0.3,0.3],
-          'S_0':[100,110,120],
-            'K':[110,110,110],
-            'T':[1,1,1]}
-
-def fourier_coefficients(a,b,psi_k,X_k, K):
-
-    return 2/(b-a)*K*(X_k-psi_k)
+def fourier_coefficients_eu_call(a,b,psi_k,X_k, K):
+    # test_val = np.cos(k*np.pi*(x-a)/(b-a))
+    # return test_val
+    return 2/(b-a)*(X_k-psi_k)*K
 
 
 def x_k(a,b,c,d,k):
@@ -22,7 +18,7 @@ def psi_k(a,b,c,d,k):
     arr_return = np.zeros(len(k))
     arr_return[0] = d-c
 
-    arr_return[1:] = (np.sin(k[1:]*np.pi*(d-a)/(b-a))- np.sin(k[1:]*np.pi*(c-a)/(b-a))*np.e**c)*(b-a)/(k[1:]*np.pi)
+    arr_return[1:] = (np.sin(k[1:]*np.pi*(d-a)/(b-a))- np.sin(k[1:]*np.pi*(c-a)/(b-a)))*(b-a)/(k[1:]*np.pi)
 
     return arr_return
 def a(S_0,K,T,r,sigma):
@@ -34,34 +30,77 @@ def characteristic_func(u,sigma,r,t):
     return np.e**(1j*u*(r-0.5*sigma**2)*t - 0.5*sigma**2*t*u**2)
 
 # Note: x must be S_0/K
-def F_n(a,b,n,sigma,r,t):
+def F_n(a,b,n,sigma,r,t,x):
+    u = n*np.pi/(b-a)
+    real_portion = characteristic_func(u,sigma,r,t)#*np.exp(1j * np.outer((x - a), n*np.pi/(b-a)))#*np.e**(-1j*n*np.pi*a/(b-a))
 
-    real_portion = np.real(characteristic_func(n*np.pi/(b-a),sigma,r,t)*np.e**(-1j*n*np.pi*a/(b-a)))
+    return real_portion#*np.cos(n*np.pi*(x-a)/(b-a))
 
-    return 2/(b-a)*real_portion
+def d1_d2(S0, K, r, sigma, T):
+    d1 = (np.log(S0/K) + (r+sigma**2)*0.5*T)/(sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    return d1,d2
+
+def call_option_price(S0, K, r, T, d1, d2):
+    return S0*norm.cdf(d1) - K*np.exp(-r*T)*norm.cdf(d2)
+
 
 
 
 if __name__ == '__main__':
+    params = {'r': [0.04, 0.04, 0.04],
+              'sigma': [0.3, 0.3, 0.3],
+              'S_0': [100, 110, 120],
+              'K': [110, 110, 110],
+              'T': [1, 1, 1]}
+
     N_vals = [64,96,128,160,192]
-    T=1
-    # k=np.linspace(0,64,65)
-    time_steps = np.linspace(0,1,360)
     num_experiments = 3
+
     for i in range(num_experiments):
+        # Black Scholes
+        d1, d2 = d1_d2(params['S_0'][i], params['K'][i], params['r'][i], params['sigma'][i], params['T'][i])
+        bs_price = call_option_price(params['S_0'][i], params['K'][i], params['r'][i], params['T'][i], d1, d2)
+
+
+
+
+        all_experiments = []
+        times = []
         for j in N_vals:
+            start = time()
             k = np.linspace(0, j, j+1)
-            all_t_vals = []
-            for t in time_steps:
-                a_ = a(params['S_0'][i],params['K'][i],params['T'][i],params['r'][i],params['sigma'][i])
-                b_ = b(params['S_0'][i],params['K'][i],params['T'][i],params['r'][i],params['sigma'][i])
-                comp_1 = x_k(a_,b_,0,b_,k)
-                comp_2 = psi_k(a_,b_,0,b_,k)
-                G_k = fourier_coefficients(a_,b_,comp_1,comp_2,params['K'][i])
+            a_val = a(params['S_0'][i], params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
+            b_val = b(params['S_0'][i], params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
+            comp_1 = x_k(a_val, b_val, 0, b_val, k)
+            comp_2 = psi_k(a_val, b_val, 0, b_val, k)
+            G_k = fourier_coefficients_eu_call(a_val, b_val, comp_2, comp_1, params['K'][i])
 
-                approx_S_t = np.sum(F_n(a_, b_, k, params['sigma'][i], params['r'][i], T-t)*G_k)*np.e**(-params['r'][i]*(T-t))
-                all_t_vals.append(approx_S_t)
-            plt.plot(time_steps,all_t_vals,label=f'N={j}')
+            F_k = F_n(a_val,b_val,k,params['sigma'][i],params['r'][i],params['T'][i], params['S_0'][i]/params['K'][i])
 
+            mult_vals = G_k*F_k
+            mult_vals[0] = mult_vals[0]*0.5
+
+            all_exp = np.exp(1j * np.outer((np.log(params['S_0'][i]/params['K'][i]) - a_val), k * np.pi / (b_val - a_val)))
+
+            approx_S_t = np.real(np.dot(all_exp, mult_vals)) * np.e**(-params['r'][i]*(params['T'][i]))
+            end = time()
+            # print(f'Approx S_t: {approx_S_t} \n'
+            #       f'BS Price: {bs_price} \n'
+            #       f'Error: {abs(approx_S_t-bs_price)} \n'
+            #       f'N: {j}\n'
+            #       f'a: {a_val}\n'
+            #       f'b: {b_val}\n'
+            #       f'G_k*F_k: {np.sum(G_k*F_k)}\n'
+            #       )
+            # all_t_vals.append(approx_S_t)
+            all_experiments.append(np.log(abs(bs_price-approx_S_t[0])))
+            times.append(end-start)
+        print(all_experiments)
+        print(f'Times: {times}')
+        plt.plot(N_vals,all_experiments,label=f'N_vals for experiment {i+1}')
+        # plt.plot(N_vals,bs_price*np.ones(len(N_vals)),label='Black Scholes')
+        plt.title(f'Experiment {i+1}')
         plt.legend()
         plt.show()
+
