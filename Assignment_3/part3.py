@@ -189,22 +189,22 @@ if __name__ == '__main__':
     T =1
 # number of space grids
     dt = T / N  # time step
-    stock_price = np.linspace(0, M, M + 1)
-    time_arr = np.linspace(0, T, N )
-    call_price = np.clip(stock_price - K, 0, M - K)
-    call_price_1 = np.clip(stock_price - K, 0, M - K)
-    cn_times = []
-    ftcs_times = []
-    start_cn = time()
-    CN_option_prices,CN_deltas = CN_scheme(call_price,M, K)
-    end_cn = time()
-    cn_times.append(np.log((end_cn-start_cn)/(M+1)))
-    # print(f'CN time: {np.log((end_cn-start_cn)/(M+1))}')
-    start_ftcs = time()
-    FTCS_option_prices,FTCS_deltas = FTCS_scheme(call_price_1, N, M, dt, r, sigma)
-    end_ftcs = time()
-    # print(f'FTCS time: {np.log((end_ftcs-start_ftcs)/(M+1))}')
-    ftcs_times.append(np.log((end_ftcs-start_ftcs)/(M+1)))
+    # stock_price = np.linspace(0, M, M + 1)
+    # time_arr = np.linspace(0, T, N )
+    # call_price = np.clip(stock_price - K, 0, M - K)
+    # call_price_1 = np.clip(stock_price - K, 0, M - K)
+    # cn_times = []
+    # ftcs_times = []
+    # start_cn = time()
+    # CN_option_prices,CN_deltas = CN_scheme(call_price,M, K)
+    # end_cn = time()
+    # cn_times.append(np.log((end_cn-start_cn)/(M+1)))
+    # # print(f'CN time: {np.log((end_cn-start_cn)/(M+1))}')
+    # start_ftcs = time()
+    # FTCS_option_prices,FTCS_deltas = FTCS_scheme(call_price_1, N, M, dt, r, sigma)
+    # end_ftcs = time()
+    # # print(f'FTCS time: {np.log((end_ftcs-start_ftcs)/(M+1))}')
+    # ftcs_times.append(np.log((end_ftcs-start_ftcs)/(M+1)))
 
 
     all_times = []
@@ -227,7 +227,7 @@ if __name__ == '__main__':
             d1, d2 = d1_d2(price, params['K'][i], params['r'][i], params['sigma'][i], params['T'][i])
             bs_price = call_option_price(price, params['K'][i], params['r'][i], params['T'][i], d1, d2)
             start = time()
-            k = np.linspace(0, j - 1, j)
+            k = np.linspace(0, j-1, j)
             a_val = a(price, params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
             b_val = b(price, params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
             comp_1 = x_k(a_val, b_val, 0, b_val, k)
@@ -240,10 +240,9 @@ if __name__ == '__main__':
             mult_vals = G_k * F_k
             mult_vals[0] = mult_vals[0] * 0.5
 
-            all_exp = np.exp(
-                1j * np.outer((np.log(price / params['K'][i]) - a_val), k * np.pi / (b_val - a_val)))
+            all_exp = np.exp(1j*(np.log(price/params['K'][i])-a_val)*k*np.pi/(b_val-a_val))
 
-            approx_S_t = np.real(np.dot(all_exp, mult_vals)) * np.e ** (-params['r'][i] * (params['T'][i]))
+            approx_S_t = np.real(np.dot(all_exp, mult_vals))*np.e**(-params['r'][i]*(params['T'][i]))
             n_results.append(approx_S_t)
             end = time()
             n_vals.append(np.log(abs(bs_price - approx_S_t)))
