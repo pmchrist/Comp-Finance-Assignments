@@ -4,6 +4,8 @@ from scipy.stats import norm
 from time import time
 import scipy as sp
 import random
+from mpl_toolkits.mplot3d import Axes3D
+from tqdm import tqdm
 def fourier_coefficients_eu_call(a,b,psi_k,X_k, K):
 
     return 2/(b-a)*(X_k-psi_k)*K
@@ -114,100 +116,52 @@ def run_part_3(N_vals,params):
     # plt.legend()
     # plt.show()
 
+def CN_scheme(option_price,M,K):
+    idx = np.arange(1, M)
+
+    d3 = dt/4*(r*idx-sigma**2*idx**2)
+    d2 = dt/2*(r+sigma**2*idx**2)
+    d1 = -dt/4*(r*idx+sigma**2*idx**2)
+
+    A_star = sp.sparse.diags([-d1[:-1],1-d2,-d3[1:]], [1, 0, -1]).toarray()
+    all_CN = []
+    all_deltas = []
+    for i in range(N):
+        A_1 = np.dot(A_star, option_price[1:-1])
+        # add BC for the right bound (the last element)
+        A_1[-1] += -2 * d1[-1] * (M - K)
+
+        A_2 = sp.sparse.diags([d1[:-1],1+d2,d3[1:]], [ 1,0,-1]).toarray()
+
+        option_price[1:-1] = np.linalg.inv(A_2)@A_1
+        copy_of_price = np.copy(option_price)
+        all_CN.append(copy_of_price)
+        delta = (copy_of_price[2:] - copy_of_price[:-2]) / 2
+        all_deltas.append(delta)
+
+    return all_CN,all_deltas
+
+def FTCS_scheme(C, N, M, dt, r, sigma):
+
+    idx = np.arange(1, M)
+    all_FTCS = []
+    all_ftcs_deltas = []
+    for n in range(N):
+        comp_1 = C[1:-1]
+        comp_2 = (r - 0.5 * sigma ** 2) *  0.5*dt* idx * (C[2:] - C[0:-2])
+        comp_3 = 0.5 * sigma ** 2 *dt* idx ** 2 * (C[2:] - 2 * C[1:-1] + C[0:-2])
+        comp_4 = -r * C[1:-1]  *dt
+
+        C[1:-1] = comp_1 +comp_2+comp_3+ comp_4
+        duplicate_c = C.copy()
+        all_FTCS.append(duplicate_c)
+        delta = (duplicate_c[2:] - duplicate_c[:-2]) / 2
+        all_ftcs_deltas.append(delta)
+
+    return all_FTCS, all_ftcs_deltas
 
 
-def FTCS_delta(a_mat,S_M,K,r,T,sigma, M,N, alpha=10):
-    x_M = np.log(S_M)
-    dx = S_M/M
-    dt = T/N
-    ds = np.e**dx
-    k_1 = np.zeros(M)
-    k_1[-1] = S_M*((r-0.5*sigma**2)+sigma**2/dx)
 
-    # dt = dx/alpha
-    v_arr = np.zeros((N, M))
-    init_price = np.maximum(np.linspace(0, S_M, M) - K, 0)
-    v_arr[0, :] = init_price # initial condition
-
-    v_arr[:, -1] = S_M-K*np.e**(-r*T) #Boundary condition
-    delta_arr = np.zeros((N, M))
-    # Create the grid
-
-    for n in range(0,N-1):
-        for i in range(1,M-1):
-            comp_1 =v_arr[n][i]
-            comp_2 = (r - 0.5 * sigma ** 2) * dt / 2 / dx * (v_arr[n][i + 1] - v_arr[n][i - 1])
-            comp_3 = 0.5 * sigma ** 2 * dt / dx ** 2 * (v_arr[n][i + 1] - 2 * v_arr[n][i] + v_arr[n][i - 1])
-            comp_4 = -r*dt*v_arr[n][i]
-            v_arr[n+1][i] = comp_1 + comp_2 + comp_3 + comp_4
-            # delta_arr[0][i] = (0.5/dx)*(np.dot(a_mat[:,i],v_arr[:,i]))+k_1[i]/i
-    prior = v_arr[:, -2]
-    v_arr[:, -1] = prior
-    delta_arr = delta_calc(v_arr, dx)
-    return v_arr,delta_arr
-
-def crank_nicolson(a_mat,S_M,K,r,T,sigma, M,N, alpha=10):
-    x_M = np.log(S_M)
-    dx = S_M/M
-    # dx = x_M/M
-    dt = T/N
-    # dt = T/N
-    ds = np.e**dx
-    k_1 = np.zeros(M)
-    k_1[-1] = S_M*((r-0.5*sigma**2)+sigma**2/dx)
-
-
-    v_arr = np.zeros((N, M))
-    init_price = np.maximum(np.linspace(0, M, M) - K, 0)
-    v_arr[0, :] = init_price # initial condition
-    # v_arr[:, -1] = S_M-K*np.e**(-r*T) #Boundary condition
-
-    v_arr[:, -1] = S_M-K*np.e**(-r*T) #Boundary condition
-    delta_arr = np.zeros(M)
-
-    for n in range(0, N - 1):
-        # v_arr[n, -1] = S_M - K * np.e ** (-r * (T-n*dt))  # Boundary condition
-        for i in range(1, M - 1):
-            comp_1 = v_arr[n][i]
-            # comp_2 = 0.25*sigma**2*dt/dx*(v_arr[n][i+1]-2*v_arr[n][i]+v_arr[n][i-1] + v_arr[n+1][i+1]-2*v_arr[n+1][i] + v_arr[n+1][i-1])
-            # comp_3 = 0.25*r*dt/dx*(v_arr[n][i+1]-v_arr[n][i-1] + v_arr[n+1][i+1]-v_arr[n+1][i-1])
-            comp_2 = (r-0.5*sigma**2)*dt/4/dx*(v_arr[n][i+1] - v_arr[n][i-1] + v_arr[n+1][i+1] - v_arr[n+1][i-1])
-            comp_3 = 0.25*sigma**2*dt/dx**2*(v_arr[n][i+1] - 2*v_arr[n][i] + v_arr[n][i-1] + v_arr[n+1][i+1] - 2*v_arr[n+1][i] + v_arr[n+1][i-1])
-            comp_4 = -0.5*r*dt*(v_arr[n][i]+v_arr[n+1][i])
-
-
-            v_arr[n+1][i] = comp_1 + comp_2 + comp_3 + comp_4
-
-            # delta_arr[i] = (0.5 / dx) * (np.dot(a_mat[:, i], v_arr[:, i])) + k_1[i] / i
-
-    prior = v_arr[:, -2]
-    v_arr[:, -1] = prior
-
-    delta_arr = delta_calc(v_arr,x_M/M)
-
-    return v_arr,delta_arr
-
-def finite_diff_mats(N,sigma,r,dt, d_X):
-
-    A_1 = sp.sparse.diags([-1,0, 1], [-1, 0, 1], shape=(N,N)).toarray()
-    A_2 = sp.sparse.diags([1, -2, 1], [-1, 0, 1], shape=(N,N)).toarray()
-
-    middle = 1-dt*sigma**2/(d_X**2)-r*dt
-    side = 0.5*dt*(sigma**2/d_X**2+(r-0.5*sigma**2)/d_X)
-
-    A_3 = sp.sparse.diags([side,middle,side],[-1, 0, 1],shape=(N,N)).toarray()
-    A_3[0, 0] = 1 - r * dt
-    A_3[0, 1] = 0
-    A_3[1, 0] = (dt * sigma ** 2) / d_X ** 2
-    A_3[-1, -1] = 0
-    return (A_1, A_2, A_3)
-
-
-def delta_calc(v_arr, dx):
-    delta_arr = []
-    for j in range(1, v_arr.shape[0] - 1):
-        delta_arr.append((v_arr[j + 1, :] - v_arr[j - 1,:]) / dx / 2)
-    return delta_arr
 
 if __name__ == '__main__':
     params = {'r': [0.04, 0.04, 0.04],
@@ -216,78 +170,236 @@ if __name__ == '__main__':
               'K': [110, 110, 110],
               'T': [1, 1, 1]}
 
-    N_vals = [8,16,32,64,128,160,192]
-    run_part_3(N_vals, params)
+    N_vals = [8,16,32,64,96,128,160,192]
+    # run_part_3(N_vals, params)
 
+    N=20000
+    M=200
+    vol=0.3
+    r=0.04
+    dt=0.01
+    d_X=0.01
+    sigma = 0.3
 
+    S_M = 200
+    K  = 110
+    num_exp = 3
 
-    # N=200
-    # M=200
-    # vol=0.3
-    # r=0.04
-    # dt=0.01
-    # d_X=0.01
-    #
-    # S_M = 200
-    # K  = 110
-    # num_exp = 3
-    # option_prices = []
-    # final_plts = []
-    # crank = []
-    # delta_crank = []
-    # delta_ftcs = []
-    # bs_deltas = []
     # for i in range(num_exp):
-    #
-    #     dt = params['T'][i]/N
-    #     d_X = S_M/M
-    #     fd_1, fd_2, fd_3 = finite_diff_mats(N, params['sigma'][i], params['r'][i], dt, d_X)
-    #
-    #     v_arr, delta = FTCS_delta(fd_1, S_M, params['K'][i], r, params['T'][i], params['sigma'][i], M, N, alpha=10)
-    #     final_plts.append(v_arr[-1, :])
-    #     delta_ftcs.append(delta[-1])
-    #     # plt.plot(np.linspace(0, M, M), v_arr[-1, :][:M], label=f'Experiment {i+1}')
-    #     crank_nic,delta_cn = crank_nicolson(fd_1, S_M, params['K'][i], r, params['T'][i], params['sigma'][i], M, N, alpha=10)
-    #     crank.append(crank_nic[-1,:])
-    #     delta_crank.append(delta_cn[-1])
-    #
-    #     #FTCS 3DGraph
-    #     # fig = plt.figure(figsize=(16, 8))
-    #     # ax = fig.add_subplot(projection='3d')
-    #     #
-    #     # # Make data.
-    #     # time = np.arange(0, N, 1)
-    #     # price = np.arange(0, M, 1)
-    #     # time, price = np.meshgrid(time, price)
-    #     #
-    #     # # Plot the surface.
-    #     # surf = ax.plot_surface(time,price, v_arr, cmap= 'plasma')
-    #     #
-    #     # ax.set_xlabel('Time Steps')
-    #     # ax.set_ylabel('Asset Price')
-    #     # ax.set_zlabel('Option Price')
-    #     # ax.view_init(20, 260)
-    # # plt.legend()
+    T =1
+# number of space grids
+    dt = T / N  # time step
+    stock_price = np.linspace(0, M, M + 1)
+    time_arr = np.linspace(0, T, N )
+    call_price = np.clip(stock_price - K, 0, M - K)
+    call_price_1 = np.clip(stock_price - K, 0, M - K)
+    cn_times = []
+    ftcs_times = []
+    start_cn = time()
+    CN_option_prices,CN_deltas = CN_scheme(call_price,M, K)
+    end_cn = time()
+    cn_times.append(np.log((end_cn-start_cn)/(M+1)))
+    # print(f'CN time: {np.log((end_cn-start_cn)/(M+1))}')
+    start_ftcs = time()
+    FTCS_option_prices,FTCS_deltas = FTCS_scheme(call_price_1, N, M, dt, r, sigma)
+    end_ftcs = time()
+    # print(f'FTCS time: {np.log((end_ftcs-start_ftcs)/(M+1))}')
+    ftcs_times.append(np.log((end_ftcs-start_ftcs)/(M+1)))
+
+
+    all_times = []
+
+    n_vals = []
+
+
+
+
+    # bs_vals.append(bs_price)
+    average_cos_times = []
+    stock_price_points = np.array([100,110,120])
+    all_cos_results = []
+    all_avg_times = []
+    for price in stock_price_points:
+        n_results = []
+        times = []
+        for j in N_vals:
+            i = 0
+            d1, d2 = d1_d2(price, params['K'][i], params['r'][i], params['sigma'][i], params['T'][i])
+            bs_price = call_option_price(price, params['K'][i], params['r'][i], params['T'][i], d1, d2)
+            start = time()
+            k = np.linspace(0, j - 1, j)
+            a_val = a(price, params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
+            b_val = b(price, params['K'][i], params['T'][i], params['r'][i], params['sigma'][i])
+            comp_1 = x_k(a_val, b_val, 0, b_val, k)
+            comp_2 = psi_k(a_val, b_val, 0, b_val, k)
+            G_k = fourier_coefficients_eu_call(a_val, b_val, comp_2, comp_1, params['K'][i])
+
+            F_k = F_n(a_val, b_val, k, params['sigma'][i], params['r'][i], params['T'][i],
+                      price / params['K'][i])
+
+            mult_vals = G_k * F_k
+            mult_vals[0] = mult_vals[0] * 0.5
+
+            all_exp = np.exp(
+                1j * np.outer((np.log(price / params['K'][i]) - a_val), k * np.pi / (b_val - a_val)))
+
+            approx_S_t = np.real(np.dot(all_exp, mult_vals)) * np.e ** (-params['r'][i] * (params['T'][i]))
+            n_results.append(approx_S_t)
+            end = time()
+            n_vals.append(np.log(abs(bs_price - approx_S_t)))
+            times.append(np.log(end - start))
+        all_cos_results.append(n_results)
+
+        all_times.append(times)
+
+        #average time for each N
+        # for i in range(len(all_times[0])):
+        #     all_avg_times.append(np.mean([all_times[0][i],all_times[1][i],all_times[2][i]]))
+            # print(f'Average time for N value {N_vals[i]} is {np.mean([all_times[0][i],all_times[1][i],all_times[2][i]])}')
+        # average_cos_times.append(all_avg_times)
+
+    # for i in range(len(average_cos_times[0])):
+    #     print(f'Average time for N value {N_vals[i]} is {np.mean(average_cos_times[:][i])}')
+    #     print(f'std time for N value {N_vals[i]} is {np.std(average_cos_times[:][i])}')
+
+
+
+
+    CN_option_prices = np.array(CN_option_prices)
+    FTCS_option_prices = np.array(FTCS_option_prices)
+    CN_deltas = np.array(CN_deltas)/(S_M/M)
+    FTCS_deltas = np.array(FTCS_deltas)/(S_M/M)
+    all_cos_results = np.array(all_cos_results)
+    d1,d2 = d1_d2(stock_price, params['K'][0], params['r'][0], params['sigma'][0], params['T'][0])
+
+    option_prices = call_option_price(stock_price, params['K'][0], params['r'][0], params['T'][0], d1, d2)
+    plt.plot(stock_price[1:-1], CN_deltas[-1,:], label='CN')
+    plt.plot(stock_price[1:-1], FTCS_deltas[-1,:], label='FTCS')
+    plt.plot(stock_price, bs_delta(d1), label='Black Scholes')
+    plt.xlabel('Stock Price')
+    plt.ylabel('Delta')
+    plt.grid()
+    plt.legend()
+    plt.show()
+
+    #Point Experiments
+    d1,d2 = d1_d2(stock_price_points, params['K'][0], params['r'][0], params['sigma'][0], params['T'][0])
+    all_cos_results = all_cos_results[:,:,0]
+    option_price_points = call_option_price(stock_price_points, params['K'][0], params['r'][0], params['T'][0], d1, d2)
+    # plt.scatter(stock_price_points, option_price_points, label='Black Scholes')
+    # plt.scatter(stock_price_points, CN_option_prices[-1,stock_price_points], label='CN')
+    # plt.scatter(stock_price_points, FTCS_option_prices[-1,stock_price_points], label='FTCS')
+    # plt.scatter(stock_price_points, all_cos_results[:,2], label='Fourier-Cosine k=32')
+    # plt.scatter(stock_price_points, all_cos_results[:,3], label='Fourier-Cosine k=64')
+    # plt.scatter(stock_price_points, all_cos_results[:,4], label='Fourier-Cosine k=128')
+
+    # plt.xlabel('Stock Price')
+    # plt.ylabel('Option Price')
+    # plt.grid()
+    # plt.legend()
+    # plt.show()
+
+    error_CN = np.log(abs(option_price_points - CN_option_prices[-1,stock_price_points]))
+    error_FTCS = np.log(abs(option_price_points - FTCS_option_prices[-1,stock_price_points]))
+    error_cos_8 = np.log(abs(option_price_points - all_cos_results[:,0]))
+    error_cos_16 = np.log(abs(option_price_points - all_cos_results[:,1]))
+    error_cos_32 = np.log(abs(option_price_points - all_cos_results[:,2]))
+    error_cos_64 = np.log(abs(option_price_points - all_cos_results[:,3]))
+    error_cos_96 = np.log(abs(option_price_points - all_cos_results[:,4]))
+    error_cos_128 = np.log(abs(option_price_points - all_cos_results[:,5]))
+    error_cos_160 = np.log(abs(option_price_points - all_cos_results[:,6]))
+    error_cos_192 = np.log(abs(option_price_points - all_cos_results[:,7]))
+    print(f'CN errors is {error_CN}')
+    print(f'FTCS errors is {error_FTCS}')
+    print(f'Cosine errors N=8 is {error_cos_8}')
+    print(f'Cosine errors N=16 is {error_cos_16}')
+    print(f'Cosine errors N=32 is {error_cos_32}')
+    print(f'Cosine errors N=64 is {error_cos_64}')
+    print(f'Cosine errors N=96 is {error_cos_96}')
+    print(f'Cosine errors N=128 is {error_cos_128}')
+    print(f'Cosine errors N=160 is {error_cos_160}')
+    print(f'Cosine errors N=192 is {error_cos_192}')
+
+
+    plt.plot(stock_price_points, error_CN, label='CN')
+    plt.plot(stock_price_points, error_FTCS, label='FTCS')
+
+    plt.plot(stock_price_points, error_cos_64, label='Fourier-Cosine k=64')
+
+    plt.xlabel('Stock Price')
+    plt.ylabel('Log(Error)')
+    plt.grid()
+    plt.legend()
+    plt.show()
+
+
+
+
+
+
+
+    plt.plot(stock_price, option_prices, label='Black Scholes')
+    plt.plot(stock_price, CN_option_prices[-1,:], label='CN')
+    plt.plot(stock_price, FTCS_option_prices[-1,:], label='FTCS')
+    plt.xlabel('Stock Price')
+    plt.ylabel('Option Price')
+    plt.grid()
+    plt.legend()
+    plt.show()
+
+    # FTCS
+    fig = plt.figure(figsize=(16, 8))
+    ax = fig.add_subplot(projection='3d')
+
+
+    stock_price_grid,  time_grid= np.meshgrid(stock_price, time_arr )
+
+    surface = ax.plot_surface(stock_price_grid, time_grid, FTCS_option_prices, cmap='coolwarm')
+
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Stock Price')
+    ax.set_zlabel('Option Price')
+    ax.view_init(15, 250)
+    ax.set_title('FTCS')
+    plt.show()
+    # CM
+    fig = plt.figure(figsize=(16, 8))
+    ax = fig.add_subplot(projection='3d')
+
+    stock_price_grid,  time_grid= np.meshgrid(stock_price, time_arr )
+
+    surface = ax.plot_surface(stock_price_grid, time_grid, CN_option_prices, cmap='coolwarm')
+
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Stock Price')
+    ax.set_zlabel('Option Price')
+    ax.set_title('Crank Nicolson')
+    ax.view_init(15, 250)
+    plt.show()
+
+
+    fig = plt.figure(figsize=(16, 8))
+    ax = fig.add_subplot(projection='3d')
+
+    stock_price_grid,  time_grid= np.meshgrid(stock_price, time_arr )
+
+    surface = ax.plot_surface(stock_price_grid, time_grid, CN_option_prices-FTCS_option_prices, cmap='coolwarm')
+
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Stock Price')
+    ax.set_zlabel('CM - FTCS Option Price Difference')
+    ax.set_title('Difference')
+    ax.view_init(15, 250)
+    plt.show()
+
+    # # print(FTCS_option_price-CN_option_price)
+    # # plt.plot(stock_price, FTCS_option_price, label='FTCS')
+    # # plt.plot(stock_price, CN_option_price, label='Crank-Nicolson', ls='--')
     # S_0 = np.linspace(0, M, M)
-    # d1,d2 = d1_d2(S_0, params['K'][0], params['r'][0], params['sigma'][0], params['T'][0])
+    # d1,d2 = d1_d2(stock_price, params['K'][0], params['r'][0], params['sigma'][0], params['T'][0])
     #
-    # bs_deltas.append(bs_delta(d1))
-    # option_prices = call_option_price(S_0, K, r, params['T'][0], d1, d2)
-    # plt.plot(np.linspace(0, M, M), final_plts[0], label=f'Experiment {1}')
-    # plt.plot(S_0, option_prices, c='r')
-    # plt.legend()
-    # plt.title('FTCS')
-    # plt.show()
-    #
-    # plt.plot(S_0, option_prices, c='r')
-    # plt.plot(np.linspace(0, M, M), crank[0], label=f'Experiment {1}')
-    # plt.title('Crank-Nicolson')
+    # option_prices = call_option_price(stock_price, params['K'][0], params['r'][0], params['T'][0], d1, d2)
+    # plt.plot(stock_price, option_prices, c='r')
     # plt.legend()
     # plt.show()
-    #
-    # plt.plot(S_0,delta_crank[0],label='Crank-Nicolson')
-    # plt.plot(S_0,delta_ftcs[0],label='FTCS')
-    # plt.plot(S_0,bs_deltas[0],label='Black-Scholes')
-    # plt.legend()
-    # plt.title('Delta')
-    # plt.show()
+
